@@ -3,13 +3,15 @@ import WaveformVisualizer from './components/WaveformVisualizer';
 import ParticleVisualizer from './components/ParticleVisualizer';
 import MandalaVisualizer from './components/MandalaVisualizer';
 import TerrainVisualizer from './components/TerrainVisualizer';
+import CellularAutomaton from './components/CellularAutomaton';
 import ElectrodeMap from './components/ElectrodeMap';
 import DataLoader from './components/DataLoader';
-import ImageLoader, { LoadedImages } from './components/ImageLoader';
+import ImageLoader, { ImageConfig } from './components/ImageLoader';
 import { MentalState, MENTAL_STATES, BrainWaveType, BRAIN_WAVES } from './utils/eegSignals';
 import { EEGData, ELECTRODES_10_20, REGION_COLORS } from './utils/electrode1020';
 
-type VisualizerMode = 'waveform' | 'particles' | 'mandala' | 'terrain';
+type VisualizerMode = 'waveform' | 'particles' | 'mandala' | 'terrain' | 'cellular';
+type CellularRule = 'game_of_life' | 'brians_brain' | 'day_and_night' | 'seeds';
 type Tab = 'visualize' | 'electrodes' | 'data' | 'images';
 
 const VISUALIZER_MODES: { id: VisualizerMode; label: string; icon: string }[] = [
@@ -17,6 +19,14 @@ const VISUALIZER_MODES: { id: VisualizerMode; label: string; icon: string }[] = 
   { id: 'particles', label: 'Particles', icon: '✦' },
   { id: 'mandala', label: 'Mandala', icon: '◎' },
   { id: 'terrain', label: 'Terrain', icon: '⛰️' },
+  { id: 'cellular', label: 'Cellular', icon: '⬡' },
+];
+
+const CELLULAR_RULES: { id: CellularRule; label: string; description: string }[] = [
+  { id: 'game_of_life', label: "Game of Life", description: 'Classic Conway rules' },
+  { id: 'brians_brain', label: "Brian's Brain", description: '3-state automaton' },
+  { id: 'day_and_night', label: 'Day & Night', description: 'Symmetric rules' },
+  { id: 'seeds', label: 'Seeds', description: 'Explosive growth' },
 ];
 
 function App() {
@@ -30,13 +40,18 @@ function App() {
   const [eegData, setEegData] = useState<EEGData | null>(null);
   const [selectedChannels, setSelectedChannels] = useState<string[]>([]);
   
-  // Images
-  const [images, setImages] = useState<LoadedImages>({
-    background: null,
-    particle: null,
-    overlay: null,
+  // Image config (includes palette and grid size)
+  const [imageConfig, setImageConfig] = useState<ImageConfig>({
+    images: { background: null, particle: null, overlay: null },
+    palette: { primary: ['#8B5CF6', '#3B82F6', '#10B981', '#F59E0B', '#EF4444'], accent: ['#EC4899', '#8B5CF6', '#06B6D4'] },
+    primaryCount: 5,
+    accentCount: 3,
+    gridSize: { width: 100, height: 100 },
   });
 
+  // Cellular automaton rule
+  const [cellularRule, setCellularRule] = useState<CellularRule>('game_of_life');
+  
   // Time for electrode map animation
   const [currentTime, setCurrentTime] = useState(0);
   useEffect(() => {
@@ -62,18 +77,28 @@ function App() {
   }, []);
 
   const renderVisualizer = useCallback(() => {
-    const props = { state: mentalState, isPlaying, eegData, selectedChannels, images };
     switch (mode) {
       case 'waveform':
-        return <WaveformVisualizer {...props} />;
+        return <WaveformVisualizer state={mentalState} isPlaying={isPlaying} eegData={eegData} selectedChannels={selectedChannels} images={imageConfig.images} />;
       case 'particles':
-        return <ParticleVisualizer {...props} />;
+        return <ParticleVisualizer state={mentalState} isPlaying={isPlaying} eegData={eegData} selectedChannels={selectedChannels} images={imageConfig.images} />;
       case 'mandala':
-        return <MandalaVisualizer {...props} />;
+        return <MandalaVisualizer state={mentalState} isPlaying={isPlaying} eegData={eegData} selectedChannels={selectedChannels} images={imageConfig.images} />;
       case 'terrain':
-        return <TerrainVisualizer {...props} />;
+        return <TerrainVisualizer state={mentalState} isPlaying={isPlaying} eegData={eegData} selectedChannels={selectedChannels} images={imageConfig.images} />;
+      case 'cellular':
+        return (
+          <CellularAutomaton
+            palette={imageConfig.palette}
+            gridSize={imageConfig.gridSize}
+            state={mentalState}
+            isPlaying={isPlaying}
+            eegData={eegData}
+            rule={cellularRule}
+          />
+        );
     }
-  }, [mode, mentalState, isPlaying, eegData, selectedChannels, images]);
+  }, [mode, mentalState, isPlaying, eegData, selectedChannels, imageConfig, cellularRule]);
 
   return (
     <div className="h-screen bg-gray-950 text-white flex flex-col overflow-hidden">
@@ -118,7 +143,7 @@ function App() {
             {/* Tabs */}
             <div className="flex border-b border-white/10 shrink-0">
               {([
-                { id: 'visualize' as Tab, label: '🎨 Viz', },
+                { id: 'visualize' as Tab, label: '🎨 Viz' },
                 { id: 'electrodes' as Tab, label: '🧠 10-20' },
                 { id: 'data' as Tab, label: '📊 Data' },
                 { id: 'images' as Tab, label: '🖼️ Images' },
@@ -163,6 +188,36 @@ function App() {
                       ))}
                     </div>
                   </section>
+
+                  {/* Cellular Automaton Rules */}
+                  {mode === 'cellular' && (
+                    <section>
+                      <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                        Automaton Rule
+                      </h3>
+                      <div className="flex flex-col gap-1.5">
+                        {CELLULAR_RULES.map((r) => (
+                          <button
+                            key={r.id}
+                            onClick={() => setCellularRule(r.id)}
+                            className={`p-2 rounded-lg text-xs text-left transition-all ${
+                              cellularRule === r.id
+                                ? 'bg-cyan-500/20 border-cyan-500/50 border text-cyan-300'
+                                : 'bg-white/5 border border-white/10 hover:bg-white/10 text-gray-400'
+                            }`}
+                          >
+                            <div className="font-medium">{r.label}</div>
+                            <div className="text-[10px] text-gray-500 mt-0.5">{r.description}</div>
+                          </button>
+                        ))}
+                      </div>
+                      {imageConfig.images.background && (
+                        <div className="mt-3 p-2 rounded-lg bg-green-500/10 border border-green-500/30 text-[10px] text-green-400">
+                          ✓ Grid sized to image: {imageConfig.gridSize.width}×{imageConfig.gridSize.height}
+                        </div>
+                      )}
+                    </section>
+                  )}
 
                   {/* Mental State */}
                   <section>
@@ -360,8 +415,8 @@ function App() {
 
               {activeTab === 'images' && (
                 <ImageLoader
-                  images={images}
-                  onImagesChange={setImages}
+                  config={imageConfig}
+                  onConfigChange={setImageConfig}
                 />
               )}
             </div>
